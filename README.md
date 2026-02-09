@@ -8,9 +8,21 @@
 - `prepare_data.py`: 数据准备脚本，下载并格式化数据集。
 - `train.py`: 微调脚本，使用 LoRA 技术进行训练。
 - `inference.py`: 推理脚本，加载微调后的模型进行对话。
+- `finetune_in_colab.ipynb`: Google Colab 专用运行笔记。
 - `pyproject.toml`: 项目依赖配置（使用 uv 管理）。
 
-## 快速开始
+## Google Colab 运行
+
+本项目已适配 Google Colab，你可以直接点击下方按钮打开 Notebook 进行运行：
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/metaxiuyi/finetune-simple-llm/blob/main/finetune_in_colab.ipynb)
+
+**运行步骤**：
+1. 点击上方按钮打开 Notebook。
+2. 在 Colab 菜单栏选择 **Runtime (修改)** -> **Change runtime type (更改运行时类型)** -> **T4 GPU** (或 A100)。
+3. 依次点击运行单元格即可。
+
+## 快速开始 (本地运行)
 
 ### 1. 环境准备
 
