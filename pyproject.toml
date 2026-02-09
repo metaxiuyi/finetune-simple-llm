@@ -1,0 +1,22 @@
+[project]
+name = "finetune-simple-llm"
+version = "0.1.0"
+description = "A simple LLM finetuning project using Qwen2.5-1.5B"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "transformers>=4.37.0",
+    "datasets",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "scipy",
+    "tiktoken",
+    "einops",
+    "modelscope",
+    "trl>=0.8.0",
+]
+
+[tool.uv]
+dev-dependencies = []
