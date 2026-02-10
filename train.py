@@ -4,16 +4,18 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    BitsAndBytesConfig
+    Trainer,
+    BitsAndBytesConfig,
+    DataCollatorForSeq2Seq
 )
 from peft import LoraConfig, get_peft_model, TaskType
-from trl import SFTTrainer, SFTConfig
 
 def main():
     # Configuration
     model_name = "Qwen/Qwen2.5-1.5B-Instruct"
     data_file = "ruozhiba_formatted.jsonl"
     output_dir = "qwen_ruozhiba_finetuned"
+    max_seq_length = 1024
     
     # 1. Load Dataset
     print(f"Loading data from {data_file}...")
@@ -27,11 +29,12 @@ def main():
     # 2. Load Tokenizer & Model
     print(f"Loading model {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    tokenizer.pad_token = tokenizer.eos_token
     
-    # Optional: Quantization configuration for lower memory usage
-    # Since 1.5B is small, we might not strictly need 4bit, but it helps on smaller GPUs.
-    # We'll use 4-bit quantization by default for broader compatibility.
+    # Qwen2.5 tokenizer usually has eos_token. We ensure pad_token is set.
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    # Quantization Config
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -54,9 +57,36 @@ def main():
         task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
     )
-    
-    # 4. Training Arguments
-    training_args = SFTConfig(
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
+
+    # 4. Data Preprocessing (Native implementation without trl)
+    def preprocess_function(examples):
+        inputs = []
+        for messages in examples["messages"]:
+            # Apply chat template to format the conversation
+            # tokenize=False returns a string
+            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+            inputs.append(text)
+        
+        # Tokenize inputs
+        model_inputs = tokenizer(
+            inputs,
+            max_length=max_seq_length,
+            truncation=True,
+            padding=False, # We will pad in data_collator
+        )
+        
+        # For Causal LM, labels are typically the same as input_ids
+        model_inputs["labels"] = model_inputs["input_ids"].copy()
+        
+        return model_inputs
+
+    print("Preprocessing dataset...")
+    tokenized_dataset = dataset.map(preprocess_function, batched=True, remove_columns=dataset.column_names)
+
+    # 5. Training Arguments
+    training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=3,
         per_device_train_batch_size=2,
@@ -65,25 +95,26 @@ def main():
         logging_steps=10,
         save_steps=100,
         fp16=True,
-        max_seq_length=1024,
-        packing=False, # Use standard packing
-        dataset_text_field=None, # We use messages
+        save_strategy="steps",
+        logging_strategy="steps",
+        remove_unused_columns=False, # Important for custom dataset columns if any, though we removed them
     )
     
-    # 5. Trainer
-    trainer = SFTTrainer(
+    # 6. Trainer
+    trainer = Trainer(
         model=model,
-        train_dataset=dataset,
         args=training_args,
-        peft_config=peft_config,
+        train_dataset=tokenized_dataset,
         tokenizer=tokenizer,
+        # DataCollatorForSeq2Seq handles padding and label masking (ignoring pad tokens)
+        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True),
     )
     
-    # 6. Train
+    # 7. Train
     print("Starting training...")
     trainer.train()
     
-    # 7. Save
+    # 8. Save
     print(f"Saving model to {output_dir}...")
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)

@@ -15,7 +15,6 @@ dependencies = [
     "tiktoken",
     "einops",
     "modelscope",
-    "trl>=0.8.0",
 ]
 
 [tool.uv]
